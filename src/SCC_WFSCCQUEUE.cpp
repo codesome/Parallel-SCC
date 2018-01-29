@@ -153,10 +153,6 @@ int main(int argc, char const *argv[]) {
             }
             
             sccs.enqueue(std::move(scc));
-            /*{ //add SCC to output list
-                std::lock_guard<std::mutex> lock(out_lk);
-                sccs.emplace_back(std::move(scc));
-            }*/
         }
     };
     
@@ -210,9 +206,7 @@ int main(int argc, char const *argv[]) {
         while(finished.load()!=active_workers.size()) {} //wait for all threads to finish
     
         finished.store(0); //reset barrier
-        // for (auto i=found_sccs;i!=sccs.size();++i) { //loop over new SCCs added
         for(QueueNode<std::vector<int>> *sccelem=sccs.getFirstNode(); sccelem!=nullptr; sccelem=sccelem->next) {
-            // for (auto elem : sccs[i]) {
             for (auto elem : (sccelem->v)) {
                 active_workers.erase(elem); //remove node from active ids
                 for (auto pred : graph[elem].preds) { //remove all edges ending at the node
@@ -228,7 +222,6 @@ int main(int argc, char const *argv[]) {
 
         sccs.flush();
     
-        // found_sccs=sccs.size();
     }
     
     auto stop_time = std::chrono::high_resolution_clock::now(); //stop timing

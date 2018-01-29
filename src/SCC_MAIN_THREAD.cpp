@@ -43,20 +43,12 @@ public:
         auto thread_task=[this]() { //logic for thread to dequeue and execute tasks
             bool empty;
             while(true) {
-                // std::unique_lock<std::mutex> cv_locker(cv_lk);
-                // cv.wait(cv_locker,[this](){return (stopflag.load()||(!tasks.empty()));}); //wait for stop signal or task to be given
                 sem_wait(&cv_sem);
                 if (stopflag.load()) { //stop signal
                     break;
                 } else {
                     std::function<void()> task = tasks.weak_dequeue(empty);
 
-                    /*{ //get task from queue
-                        std::lock_guard<std::mutex> q_lk(queue_lk);
-                        task=tasks.front();
-                        tasks.pop();
-                    }*/
-                    // cv_locker.unlock();
                     if(!empty)
                         task(); //execute task
                 }
@@ -69,12 +61,7 @@ public:
 
     void add_task(std::function<void()> task) {
         tasks.enqueue(task);
-        /*{ //lock queue to add task
-            std::lock_guard<std::mutex> q_lk(queue_lk);
-            tasks.push(task);
-        }*/
         sem_post(&cv_sem);
-        // cv.notify_all();
     }
 
     void stop() { //issue signal to stop workers, and join them
@@ -82,7 +69,6 @@ public:
         for (int i = 0; i < numthreads; ++i) {
             sem_post(&cv_sem);
         }
-        // cv.notify_all();
         for (auto iter = std::begin(workers);iter!= std::end(workers);++iter) {
             iter->join();
         }
@@ -203,16 +189,6 @@ int main(int argc, char const *argv[]) {
             changeflag.store(false);
             finished.store(0);
     
-            // for (int i : active_workers) {
-            //     auto task=[&,i,phase_one_single_iter](){ //one propagation from one node
-            //         int node_num=i;
-            //         node& selfref=graph[i];
-            //         int own_val=registers[i]->load();
-            //         phase_one_single_iter(node_num,selfref,own_val);
-            //         ++finished;
-            //     };
-            //     tq.add_task(task); //schedule task
-            // }
             tasks_created = 0;
             for (int i=0; i<aw_size; i+=task_pool_step) {
                 auto task=[&,i,phase_one_single_iter](){ //one propagation from one node
@@ -246,15 +222,6 @@ int main(int argc, char const *argv[]) {
     
         finished.store(0); //reset barrier
     
-        // for (int i : active_workers) {
-        //     auto task=[i,&graph,phase_two,&finished](){ //initiate root check at all nodes
-        //         int node_num=i;
-        //         node& selfref = graph[i];
-        //         phase_two(node_num,selfref);
-        //         ++finished;
-        //     };
-        //     tq.add_task(task);
-        // }
         tasks_created = 0;
         for (int i=0; i<aw_size; i+=task_pool_step) {
 
@@ -292,14 +259,6 @@ int main(int argc, char const *argv[]) {
             for (auto elem : sccs[i]) {
                 active_workers.erase(elem); //remove node from active ids
                 registers[elem]->store(n+1);
-                // for (auto pred : graph[elem].preds) { //remove all edges ending at the node
-                //     graph[pred].succs.erase(elem);
-                // }
-                // for (auto succ : graph[elem].succs) { //remove all edges starting at the node
-                //     graph[succ].preds.erase(elem);
-                // }
-                // graph.erase(elem); //remove node's graph entry
-                // registers.erase(elem); //remove node's register
             }
         }
     

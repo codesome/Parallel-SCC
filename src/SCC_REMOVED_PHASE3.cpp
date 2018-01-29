@@ -50,12 +50,6 @@ public:
                 }
                 else {
                     std::function<void()> task = tasks.dequeue();;
-                    /*{ //get task from queue
-                        std::lock_guard<std::mutex> q_lk(queue_lk);
-                        task=tasks.front();
-                        tasks.pop();
-                    }*/
-                    // cv_locker.unlock();
                     task(); //execute task
                 }
             }
@@ -67,12 +61,7 @@ public:
 
     void add_task(std::function<void()> task) {
         tasks.enqueue(task);
-        /*{ //lock queue to add task
-            std::lock_guard<std::mutex> q_lk(queue_lk);
-            tasks.push(task);
-        }*/
         sem_post(&cv_sem);
-        // cv.notify_all();
     }
 
     void stop() { //issue signal to stop workers, and join them
@@ -80,7 +69,6 @@ public:
         for (int i = 0; i < numthreads; ++i) {
             sem_post(&cv_sem);
         }
-        // cv.notify_all();
         for (auto iter = std::begin(workers);iter!= std::end(workers);++iter) {
             iter->join();
         }
@@ -226,14 +214,6 @@ int main(int argc, char const *argv[]) {
             for (auto elem : sccs[i]) {
                 active_workers.erase(elem); //remove node from active ids
                 registers[elem]->store(n+1);
-                // for (auto pred : graph[elem].preds) { //remove all edges ending at the node
-                //     graph[pred].succs.erase(elem);
-                // }
-                // for (auto succ : graph[elem].succs) { //remove all edges starting at the node
-                //     graph[succ].preds.erase(elem);
-                // }
-                // graph.erase(elem); //remove node's graph entry
-                // registers.erase(elem); //remove node's register
             }
         }
     

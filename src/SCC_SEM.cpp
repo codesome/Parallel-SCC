@@ -40,8 +40,6 @@ public:
         sem_init(&cv_sem, 0, 0);
         auto thread_task=[this]() { //logic for thread to dequeue and execute tasks
             while(true) {
-                // std::unique_lock<std::mutex> cv_locker(cv_lk);
-                // cv.wait(cv_locker,[this](){return (stopflag.load()||(!tasks.empty()));}); //wait for stop signal or task to be given
                 sem_wait(&cv_sem);
                 if (stopflag.load()) { //stop signal
                     break;
@@ -53,7 +51,6 @@ public:
                         task=tasks.front();
                         tasks.pop();
                     }
-                    // cv_locker.unlock();
                     task(); //execute task
                 }
             }
@@ -69,7 +66,6 @@ public:
             tasks.push(task);
         }
         sem_post(&cv_sem);
-        // cv.notify_all();
     }
 
     void stop() { //issue signal to stop workers, and join them
@@ -77,7 +73,6 @@ public:
         for (int i = 0; i < numthreads; ++i) {
             sem_post(&cv_sem);
         }
-        // cv.notify_all();
         for (auto iter = std::begin(workers);iter!= std::end(workers);++iter) {
             iter->join();
         }

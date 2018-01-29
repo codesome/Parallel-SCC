@@ -34,6 +34,10 @@ add_executable(MAIN_THREAD
 	src/SCC_MAIN_THREAD.cpp
 )
 
+add_executable(BEST
+	src/SCC_MAIN_THREAD.cpp
+)
+
 add_executable(GenerateGraph 
 	src/GenerateGraph.cpp
 )
@@ -46,5 +50,6 @@ target_link_libraries (SEM_WFPOOL pthread)
 target_link_libraries (REMOVED_PHASE3 pthread)
 target_link_libraries (STATIC_ASSIGNMENT pthread)
 target_link_libraries (MAIN_THREAD pthread)
+target_link_libraries (BEST pthread)
 
 include_directories("./include")

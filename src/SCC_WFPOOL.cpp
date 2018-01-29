@@ -42,11 +42,6 @@ public:
                 }
                 else {
                     std::function<void()> task = tasks.dequeue();;
-                    /*{ //get task from queue
-                        std::lock_guard<std::mutex> q_lk(queue_lk);
-                        task=tasks.front();
-                        tasks.pop();
-                    }*/
                     cv_locker.unlock();
                     task(); //execute task
                 }
@@ -59,10 +54,6 @@ public:
 
     void add_task(std::function<void()> task) {
         tasks.enqueue(task);
-        /*{ //lock queue to add task
-            std::lock_guard<std::mutex> q_lk(queue_lk);
-            tasks.push(task);
-        }*/
         cv.notify_all();
     }
 
