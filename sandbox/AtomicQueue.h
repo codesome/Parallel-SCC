@@ -4,30 +4,14 @@
 #include <atomic>
 #include <vector>
 #include <memory>
+#include <sstream>
 
 template <typename T>
 struct AtomicQueueNode {
     T v;
     std::shared_ptr<AtomicQueueNode<T>> next;
-    AtomicQueueNode(T v): v(v) {
+    AtomicQueueNode(T v=T()): v(v) {
         next = std::shared_ptr<AtomicQueueNode<T>>(nullptr);
-    }
-    AtomicQueueNode() {
-        next = std::shared_ptr<AtomicQueueNode<T>>(nullptr);
-    }
-    ~AtomicQueueNode() {
-        std::cout<<"YAY ";
-        std::cout.flush();
-        std::cout<<next.get()<<" WHEY ";
-        if (next.get()!=nullptr) {
-            std::cout.flush();
-            std::cout<<next->v;
-            std::cout.flush();
-            std::cout<<" BAY"<<std::endl;
-        }
-        else {
-            std::cout<<"RAY"<<std::endl;
-        }
     }
 };
 
@@ -48,7 +32,7 @@ struct AtomicQueueNode {
 //                     if(atomic_compare_exchange_strong(&(last->next), &next, newNode)) {
 //                         atomic_compare_exchange_strong(&tail, &last, newNode);
 //                         return;
-//                     } 
+//                     }
 //                 } else {
 //                     atomic_compare_exchange_strong(&tail, &last, next);
 //                 }
@@ -90,8 +74,9 @@ public:
         while(true) {
             auto last = std::atomic_load(&tail);
             auto next = last->next;
+            decltype(next) zero;
             if (next.get()==nullptr) {
-                if (std::atomic_compare_exchange_strong(&(last->next),&(next),node)) {
+                if (std::atomic_compare_exchange_strong(&(last->next),&(zero),node)) {
                     std::atomic_compare_exchange_strong(&(tail),&(last),node);
                     return;
                 }
@@ -106,6 +91,16 @@ public:
     }
     bool empty() {
         return head.get()==tail.get();
+    }
+    ~AtomicEnDqQueue() { //to prevent stack overflow
+        auto ptr=head;
+        auto next=ptr->next;
+        head=nullptr;
+        tail=nullptr;
+        while(next.get()!=nullptr) {
+            ptr=next;
+            next=ptr->next;
+        }
     }
 private:
     std::shared_ptr<AtomicQueueNode<T>> head, tail;
