@@ -173,6 +173,27 @@ public:
             }
         }
     }
+    T weak_dequeue(bool &emp) {
+        while(true) {
+            if(empty()) {
+                emp = true;
+                return head.load()->v;
+            }
+            AtomicQueueNode<T> *first = head.load();
+            AtomicQueueNode<T> *last = tail.load();
+            AtomicQueueNode<T> *next = (first->next).load();
+            if(first==last) {
+                if(next!=nullptr)
+                    tail.compare_exchange_strong(last, next);
+            } else {
+                T val = next->v;
+                if(head.compare_exchange_strong(first, next)) {
+                    emp = false;
+                    return val;
+                }
+            }
+        }
+    }
     bool empty() {
         return head.load()==tail.load();
     }
