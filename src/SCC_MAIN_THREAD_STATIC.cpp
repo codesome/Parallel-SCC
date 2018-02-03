@@ -48,7 +48,6 @@ public:
                     break;
                 } else {
                     std::function<void()> task = tasks.weak_dequeue(empty);
-
                     if(!empty)
                         task(); //execute task
                 }

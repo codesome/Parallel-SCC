@@ -30,25 +30,27 @@ class task_queue { //a thread pool implementation - is necessary to get good per
     std::mutex queue_lk; //used to protect the queue of tasks
     std::condition_variable cv; //used by idle workers to wait for tasks
     std::mutex cv_lk; //used to protect the condition variable itself
-    AtomicEnDqQueue<std::function<void()>> tasks; //queue of tasks to be executed
     std::vector<std::thread> workers; //actual worker threads
     std::atomic<bool> stopflag; //used to signal workers to stop
     sem_t cv_sem;
     int numthreads;
 
 public:
+    AtomicEnDqQueue<std::function<void()>> tasks; //queue of tasks to be executed
     task_queue(int numthreads=8) : stopflag(false) { //by default, we have 8 worker threads
         this->numthreads = numthreads;
         sem_init(&cv_sem, 0, 0);
         auto thread_task=[this]() { //logic for thread to dequeue and execute tasks
+            bool empty;
             while(true) {
                 sem_wait(&cv_sem);
                 if (stopflag.load()) { //stop signal
                     break;
                 }
                 else {
-                    std::function<void()> task = tasks.dequeue();;
-                    task(); //execute task
+                    std::function<void()> task = tasks.weak_dequeue(empty);
+                    if(!empty)
+                        task(); //execute task
                 }
             }
         };
@@ -70,6 +72,10 @@ public:
         for (auto iter = std::begin(workers);iter!= std::end(workers);++iter) {
             iter->join();
         }
+    }
+    
+    AtomicEnDqQueue<std::function<void()>>* getTaskQueuePointer() {
+        return &tasks;
     }
 };
 
@@ -93,6 +99,10 @@ int main(int argc, char const *argv[]) {
         graph[u].succs.emplace(v);
         graph[v].preds.emplace(u);
     }
+
+    task_queue tq;
+    bool empty;
+    AtomicEnDqQueue<std::function<void()>>* tasks = tq.getTaskQueuePointer();
 
     std::atomic<bool> changeflag(false); //used to track if any colors changed
     std::map<int,std::unique_ptr<std::atomic<int>>> registers; //registers used for propagation
@@ -165,7 +175,6 @@ int main(int argc, char const *argv[]) {
     
     unsigned found_sccs=0;
     auto start_time = std::chrono::high_resolution_clock::now(); //start timing
-    task_queue tq;
     
     while (active_workers.size()) { //while graph is non-empty
     
@@ -189,6 +198,15 @@ int main(int argc, char const *argv[]) {
                 tq.add_task(task); //schedule task
             }
     
+            while(true) {
+                std::function<void()> task = tasks->weak_dequeue(empty);
+                if(empty) {
+                    break;
+                } else {
+                    task();
+                }
+            }
+
             while (finished.load()!=active_workers.size()) {} //wait for all threads to complete the iteration
     
         } while(changeflag.load()); //until graph reaches stable state
@@ -204,7 +222,16 @@ int main(int argc, char const *argv[]) {
             };
             tq.add_task(task);
         }
-    
+
+        while(true) {
+            std::function<void()> task = tasks->weak_dequeue(empty);
+            if(empty) {
+                break;
+            } else {
+                task();
+            }
+        }
+
         while(finished.load()!=active_workers.size()) {} //wait for all threads to finish
     
         finished.store(0); //reset barrier

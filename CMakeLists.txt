@@ -30,12 +30,12 @@ add_executable(STATIC_ASSIGNMENT
 	src/SCC_STATIC_ASSIGNMENT.cpp
 )
 
-add_executable(MAIN_THREAD
-	src/SCC_MAIN_THREAD.cpp
+add_executable(MAIN_THREAD_STATIC
+	src/SCC_MAIN_THREAD_STATIC.cpp
 )
 
-add_executable(BEST
-	src/SCC_MAIN_THREAD.cpp
+add_executable(MAIN_THREAD_DYNAMIC
+	src/SCC_MAIN_THREAD_DYNAMIC.cpp
 )
 
 add_executable(GenerateGraph 
@@ -49,7 +49,7 @@ target_link_libraries (SEM pthread)
 target_link_libraries (SEM_WFPOOL pthread)
 target_link_libraries (REMOVED_PHASE3 pthread)
 target_link_libraries (STATIC_ASSIGNMENT pthread)
-target_link_libraries (MAIN_THREAD pthread)
-target_link_libraries (BEST pthread)
+target_link_libraries (MAIN_THREAD_STATIC pthread)
+target_link_libraries (MAIN_THREAD_DYNAMIC pthread)
 
 include_directories("./include")

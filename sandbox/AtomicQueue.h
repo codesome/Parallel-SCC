@@ -70,13 +70,13 @@ public:
         tail = head;
     }
     void enqueue(T v) {
-        auto node = std::make_shared<AtomicQueueNode<T>>(v);
+        std::shared_ptr<AtomicQueueNode<T>> node = std::make_shared<AtomicQueueNode<T>>(v);
         while(true) {
-            auto last = std::atomic_load(&tail);
-            auto next = last->next;
+            std::shared_ptr<AtomicQueueNode<T>> last = std::atomic_load(&tail);
+            std::shared_ptr<AtomicQueueNode<T>> next = last->next;
             decltype(next) zero;
             if (next.get()==nullptr) {
-                if (std::atomic_compare_exchange_strong(&(last->next),&(zero),node)) {
+                if (std::atomic_compare_exchange_strong(&(last->next),&(next),node)) {
                     std::atomic_compare_exchange_strong(&(tail),&(last),node);
                     return;
                 }
@@ -87,12 +87,25 @@ public:
         }
     }
     T dequeue() {
-        return T();
+        while(true) {
+            std::shared_ptr<AtomicQueueNode<T>> first = std::atomic_load(&head);
+            std::shared_ptr<AtomicQueueNode<T>> last = std::atomic_load(&tail);
+            std::shared_ptr<AtomicQueueNode<T>> next = first->next;
+            if(first.get()==last.get()) {
+                if(next.get()!=nullptr)
+                    atomic_compare_exchange_strong(&tail, &last, next);
+            } else {
+                T val = next->v;
+                if(atomic_compare_exchange_strong(&head, &first, next)) {
+                    return val;
+                }
+            }
+        }
     }
     bool empty() {
         return head.get()==tail.get();
     }
-    ~AtomicEnDqQueue() { //to prevent stack overflow
+    ~AtomicEnDqQueue() {
         auto ptr=head;
         auto next=ptr->next;
         head=nullptr;

@@ -64,15 +64,12 @@ private:
 
 /////////////////////
 
-/*
+// garbage collected
 template <typename T>
 struct AtomicQueueNode {
     T v;
     std::shared_ptr<AtomicQueueNode<T>> next;
-    AtomicQueueNode(T v): v(v) {
-        next = std::shared_ptr<AtomicQueueNode<T>>(nullptr);
-    }
-    AtomicQueueNode() {
+    AtomicQueueNode(T v=T()): v(v) {
         next = std::shared_ptr<AtomicQueueNode<T>>(nullptr);
     }
 };
@@ -85,24 +82,26 @@ public:
         tail = head;
     }
     void enqueue(T v) {
-        std::shared_ptr<AtomicQueueNode<T>> newNode = std::make_shared<AtomicQueueNode<T>>(v);
+        std::shared_ptr<AtomicQueueNode<T>> node = std::make_shared<AtomicQueueNode<T>>(v);
         while(true) {
-            std::shared_ptr<AtomicQueueNode<T>> last = tail;
+            std::shared_ptr<AtomicQueueNode<T>> last = std::atomic_load(&tail);
             std::shared_ptr<AtomicQueueNode<T>> next = last->next;
-            if(next.get()==nullptr) {
-                if(atomic_compare_exchange_strong(&(last->next), &next, newNode)) {
-                    atomic_compare_exchange_strong(&tail, &last, newNode);
+            decltype(next) zero;
+            if (next.get()==nullptr) {
+                if (std::atomic_compare_exchange_strong(&(last->next),&(next),node)) {
+                    std::atomic_compare_exchange_strong(&(tail),&(last),node);
                     return;
-                } 
-            } else {
-                atomic_compare_exchange_strong(&tail, &last, next);
+                }
+            }
+            else {
+                std::atomic_compare_exchange_strong(&(tail),&(last),next);
             }
         }
     }
     T dequeue() {
         while(true) {
-            std::shared_ptr<AtomicQueueNode<T>> first = head;
-            std::shared_ptr<AtomicQueueNode<T>> last = tail;
+            std::shared_ptr<AtomicQueueNode<T>> first = std::atomic_load(&head);
+            std::shared_ptr<AtomicQueueNode<T>> last = std::atomic_load(&tail);
             std::shared_ptr<AtomicQueueNode<T>> next = first->next;
             if(first.get()==last.get()) {
                 if(next.get()!=nullptr)
@@ -115,14 +114,46 @@ public:
             }
         }
     }
+    T weak_dequeue(bool &emp) {
+        while(true) {
+            if(empty()) {
+                emp = true;
+                return std::atomic_load(&head)->v;
+            }
+            std::shared_ptr<AtomicQueueNode<T>> first = std::atomic_load(&head);
+            std::shared_ptr<AtomicQueueNode<T>> last = std::atomic_load(&tail);
+            std::shared_ptr<AtomicQueueNode<T>> next = first->next;
+            if(first.get()==last.get()) {
+                if(next.get()!=nullptr)
+                    atomic_compare_exchange_strong(&tail, &last, next);
+            } else {
+                T val = next->v;
+                if(atomic_compare_exchange_strong(&head, &first, next)) {
+                    emp = false;
+                    return val;
+                }
+            }
+        }
+    }
     bool empty() {
         return head.get()==tail.get();
+    }
+    ~AtomicEnDqQueue() {
+        auto ptr=head;
+        auto next=ptr->next;
+        head=nullptr;
+        tail=nullptr;
+        while(next.get()!=nullptr) {
+            ptr=next;
+            next=ptr->next;
+        }
     }
 private:
     std::shared_ptr<AtomicQueueNode<T>> head, tail;
 };
-*/
 
+/*
+// not garbage collected
 template <typename T>
 struct AtomicQueueNode {
     T v;
@@ -217,5 +248,5 @@ public:
 private:
     std::atomic<AtomicQueueNode<T>*> head, tail;
 };
-
+*/
 #endif
