@@ -39,7 +39,7 @@ add_executable(MAIN_THREAD_DYNAMIC
 )
 
 add_executable(GenerateGraph 
-	src/GenerateGraph.cpp
+	scripts/GenerateGraph.cpp
 )
 
 target_link_libraries (SCC pthread)

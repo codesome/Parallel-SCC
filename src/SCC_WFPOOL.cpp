@@ -70,21 +70,25 @@ int main(int argc, char const *argv[]) {
     const char *file_name = argc>1 ? argv[1]: "graph.txt";
 
     std::ifstream reader(file_name); //graph reader
-    int n; // number of nodes
-    int e; // number of edges
-    reader >> n >> e;
-    std::cout << n << " " << e << "\n";
+    int n; //number of nodes
+    reader>>n;
     std::map<int,node> graph;
 
     for (int i=0;i!=n;++i) { //construct the edge lists with empty initialization
         graph.emplace(i+1,node());
     }
     
-    for (int i=0;i<e;++i) {
-        int u, v;
-        reader >> u >> v;
-        graph[u].succs.emplace(v);
-        graph[v].preds.emplace(u);
+    for (int i=0;i!=n;++i) {
+        int ne; // number of edges
+        reader>>ne;
+        for(int j=0; j<ne; j++) {
+            int local;
+            reader>>local; //other end of edge
+            if (local!=i+1) { //insert into the graph
+                graph[i+1].succs.emplace(local);
+                graph[local].preds.emplace(i+1);
+            }
+        }
     }
 
     std::atomic<bool> changeflag(false); //used to track if any colors changed
