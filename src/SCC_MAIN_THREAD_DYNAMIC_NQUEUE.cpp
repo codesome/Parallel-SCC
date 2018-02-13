@@ -19,7 +19,7 @@
 #include <tuple>
 #include <vector>
 #include <semaphore.h>
-#include "AtomicQueue.h"
+#include "concurrentqueue.h"
 
 struct node { //used for each node of the graph
     std::set<int> preds; //set of all predecessors
@@ -33,8 +33,10 @@ class task_queue { //a thread pool implementation - is necessary to get good per
     int numthreads;
 
 public:
-    AtomicEnDqQueue<std::function<void()>> tasks; //queue of tasks to be executed
-    task_queue(int numthreads=8) : stopflag(false) { //by default, we have 8 worker threads
+    moodycamel::ConcurrentQueue<std::function<void()>> *tasks; //queue of tasks to be executed
+    
+    task_queue(int max_tasks, int numthreads=8) : stopflag(false) { //by default, we have 8 worker threads
+        tasks = new moodycamel::ConcurrentQueue<std::function<void()>>(max_tasks);
         this->numthreads = numthreads;
         sem_init(&cv_sem, 0, 0);
         auto thread_task=[this]() { //logic for thread to dequeue and execute tasks
@@ -45,7 +47,14 @@ public:
                     break;
                 }
                 else {
-                    std::function<void()> task = tasks.weak_dequeue(empty);
+                    std::function<void()> task;
+                    empty = false;
+                    while(!tasks->try_dequeue(task)) {
+                        if(tasks->size_approx()==0) {
+                            empty = true;
+                            break;
+                        }
+                    }
                     if(!empty)
                         task(); //execute task
                 }
@@ -57,7 +66,7 @@ public:
     }
 
     void add_task(std::function<void()> task) {
-        tasks.enqueue(task);
+        tasks->enqueue(task);
         sem_post(&cv_sem);
     }
 
@@ -71,8 +80,8 @@ public:
         }
     }
     
-    AtomicEnDqQueue<std::function<void()>>* getTaskQueuePointer() {
-        return &tasks;
+    moodycamel::ConcurrentQueue<std::function<void()>>* getTaskQueuePointer() {
+        return tasks;
     }
 };
 
@@ -101,9 +110,9 @@ int main(int argc, char const *argv[]) {
         }
     }
 
-    task_queue tq;
+    task_queue tq(n);
     bool empty;
-    AtomicEnDqQueue<std::function<void()>>* tasks = tq.getTaskQueuePointer();
+    // AtomicEnDqQueue<std::function<void()>>* tasks = tq.getTaskQueuePointer();
 
     std::atomic<bool> changeflag(false); //used to track if any colors changed
     std::map<int,std::unique_ptr<std::atomic<int>>> registers; //registers used for propagation
@@ -199,14 +208,14 @@ int main(int argc, char const *argv[]) {
                 tq.add_task(task); //schedule task
             }
     
-            while(true) {
-                std::function<void()> task = tasks->weak_dequeue(empty);
-                if(empty) {
-                    break;
-                } else {
-                    task();
-                }
-            }
+            // while(true) {
+            //     std::function<void()> task = tasks->weak_dequeue(empty);
+            //     if(empty) {
+            //         break;
+            //     } else {
+            //         task();
+            //     }
+            // }
 
             while (finished.load()!=active_workers.size()) {} //wait for all threads to complete the iteration
     
@@ -224,14 +233,14 @@ int main(int argc, char const *argv[]) {
             tq.add_task(task);
         }
 
-        while(true) {
-            std::function<void()> task = tasks->weak_dequeue(empty);
-            if(empty) {
-                break;
-            } else {
-                task();
-            }
-        }
+        // while(true) {
+        //     std::function<void()> task = tasks->weak_dequeue(empty);
+        //     if(empty) {
+        //         break;
+        //     } else {
+        //         task();
+        //     }
+        // }
 
         while(finished.load()!=active_workers.size()) {} //wait for all threads to finish
     

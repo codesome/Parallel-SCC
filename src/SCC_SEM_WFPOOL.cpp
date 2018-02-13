@@ -26,9 +26,6 @@ struct node { //used for each node of the graph
 };
 
 class task_queue { //a thread pool implementation - is necessary to get good performance
-    std::mutex queue_lk; //used to protect the queue of tasks
-    std::condition_variable cv; //used by idle workers to wait for tasks
-    std::mutex cv_lk; //used to protect the condition variable itself
     AtomicEnDqQueue<std::function<void()>> tasks; //queue of tasks to be executed
     std::vector<std::thread> workers; //actual worker threads
     std::atomic<bool> stopflag; //used to signal workers to stop

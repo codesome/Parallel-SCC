@@ -38,6 +38,14 @@ add_executable(MAIN_THREAD_DYNAMIC
 	src/SCC_MAIN_THREAD_DYNAMIC.cpp
 )
 
+add_executable(MAIN_THREAD_DYNAMIC_NQUEUE
+	src/SCC_MAIN_THREAD_DYNAMIC_NQUEUE.cpp
+)
+
+add_executable(MAIN_THREAD_STATIC_NQUEUE
+	src/SCC_MAIN_THREAD_STATIC_NQUEUE.cpp
+)
+
 add_executable(GenerateGraph 
 	scripts/GenerateGraph.cpp
 )
@@ -51,5 +59,7 @@ target_link_libraries (REMOVED_PHASE3 pthread)
 target_link_libraries (STATIC_ASSIGNMENT pthread)
 target_link_libraries (MAIN_THREAD_STATIC pthread)
 target_link_libraries (MAIN_THREAD_DYNAMIC pthread)
+target_link_libraries (MAIN_THREAD_DYNAMIC_NQUEUE pthread)
+target_link_libraries (MAIN_THREAD_STATIC_NQUEUE pthread)
 
 include_directories("./include")

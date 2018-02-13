@@ -20,6 +20,7 @@
 #include <vector>
 #include <semaphore.h>
 #include "AtomicQueue.h"
+#include "concurrentqueue.h"
 
 struct node { //used for each node of the graph
     std::set<int> preds; //set of all predecessors
@@ -33,8 +34,10 @@ class task_queue { //a thread pool implementation - is necessary to get good per
     int numthreads;
 
 public:
-    AtomicEnDqQueue<std::function<void()>> tasks; //queue of tasks to be executed
-    task_queue(int numthreads=8) : stopflag(false) { //by default, we have 8 worker threads
+    moodycamel::ConcurrentQueue<std::function<void()>> *tasks; //queue of tasks to be executed
+    
+    task_queue(int max_tasks, int numthreads=8) : stopflag(false) { //by default, we have 8 worker threads
+        tasks = new moodycamel::ConcurrentQueue<std::function<void()>>(max_tasks);
         this->numthreads = numthreads;
         sem_init(&cv_sem, 0, 0);
         auto thread_task=[this]() { //logic for thread to dequeue and execute tasks
@@ -45,7 +48,14 @@ public:
                     break;
                 }
                 else {
-                    std::function<void()> task = tasks.weak_dequeue(empty);
+                    std::function<void()> task;
+                    empty = false;
+                    while(!tasks->try_dequeue(task)) {
+                        if(tasks->size_approx()==0) {
+                            empty = true;
+                            break;
+                        }
+                    }
                     if(!empty)
                         task(); //execute task
                 }
@@ -57,7 +67,7 @@ public:
     }
 
     void add_task(std::function<void()> task) {
-        tasks.enqueue(task);
+        tasks->enqueue(task);
         sem_post(&cv_sem);
     }
 
@@ -71,8 +81,8 @@ public:
         }
     }
     
-    AtomicEnDqQueue<std::function<void()>>* getTaskQueuePointer() {
-        return &tasks;
+    moodycamel::ConcurrentQueue<std::function<void()>>* getTaskQueuePointer() {
+        return tasks;
     }
 };
 
@@ -100,10 +110,11 @@ int main(int argc, char const *argv[]) {
             }
         }
     }
+    int task_pool_step = argc>2? atoi(argv[2]):10000;
 
-    task_queue tq;
+    task_queue tq(n/task_pool_step);
     bool empty;
-    AtomicEnDqQueue<std::function<void()>>* tasks = tq.getTaskQueuePointer();
+    moodycamel::ConcurrentQueue<std::function<void()>>* tasks = tq.getTaskQueuePointer();
 
     std::atomic<bool> changeflag(false); //used to track if any colors changed
     std::map<int,std::unique_ptr<std::atomic<int>>> registers; //registers used for propagation
@@ -178,7 +189,8 @@ int main(int argc, char const *argv[]) {
     auto start_time = std::chrono::high_resolution_clock::now(); //start timing
     
     while (active_workers.size()) { //while graph is non-empty
-    
+        int aw_size = active_workers.size();
+        int tasks_created;
         for (auto& pair : registers) { //initialize registers with node's colors
             pair.second->store(pair.first);
         }
@@ -188,19 +200,33 @@ int main(int argc, char const *argv[]) {
             changeflag.store(false);
             finished.store(0);
     
-            for (int i : active_workers) {
+            tasks_created = 0;
+            for (int i=0; i<aw_size; i+=task_pool_step) {
                 auto task=[&,i,phase_one_single_iter](){ //one propagation from one node
-                    int node_num=i;
-                    node& selfref=graph[i];
-                    int own_val=registers[i]->load();
-                    phase_one_single_iter(node_num,selfref,own_val);
+                    std::set<int>::iterator it = std::next(active_workers.begin(), i);
+                    int trip_count = task_pool_step<(aw_size-i)? task_pool_step:(aw_size-i);
+                    for(int j=0; j<trip_count; j++) {
+                        int node_num=*it;
+                        node& selfref=graph[node_num];
+                        int own_val=registers[node_num]->load();
+                        phase_one_single_iter(node_num,selfref,own_val);
+                        ++it;
+                    }
                     ++finished;
                 };
                 tq.add_task(task); //schedule task
+                tasks_created++;
             }
     
             while(true) {
-                std::function<void()> task = tasks->weak_dequeue(empty);
+                std::function<void()> task;
+                empty = false;
+                while(!tasks->try_dequeue(task)) {
+                    if(tasks->size_approx()==0) {
+                        empty = true;
+                        break;
+                    }
+                }
                 if(empty) {
                     break;
                 } else {
@@ -208,32 +234,50 @@ int main(int argc, char const *argv[]) {
                 }
             }
 
-            while (finished.load()!=active_workers.size()) {} //wait for all threads to complete the iteration
+            while (finished.load()!=tasks_created) {} //wait for all threads to complete the iteration
     
         } while(changeflag.load()); //until graph reaches stable state
     
         finished.store(0); //reset barrier
     
-        for (int i : active_workers) {
-            auto task=[i,&graph,phase_two,&finished](){ //initiate root check at all nodes
-                int node_num=i;
-                node& selfref = graph[i];
-                phase_two(node_num,selfref);
+        tasks_created = 0;
+        for (int i=0; i<aw_size; i+=task_pool_step) {
+
+            auto task=[&,i,phase_two](){ //initiate root check at all nodes
+
+                std::set<int>::iterator it = std::next(active_workers.begin(), i);
+                int trip_count = task_pool_step<(aw_size-i)? task_pool_step:(aw_size-i);
+                for(int j=0; j<trip_count; j++) {
+                    int node_num=*it;
+                    node& selfref = graph[i];
+                    phase_two(node_num,selfref);
+                    ++it;
+                }
                 ++finished;
+            
             };
             tq.add_task(task);
+
+            tasks_created++;
         }
 
         while(true) {
-            std::function<void()> task = tasks->weak_dequeue(empty);
+            std::function<void()> task;
+            empty = false;
+            while(!tasks->try_dequeue(task)) {
+                if(tasks->size_approx()==0) {
+                    empty = true;
+                    break;
+                }
+            }
             if(empty) {
                 break;
             } else {
                 task();
             }
         }
-
-        while(finished.load()!=active_workers.size()) {} //wait for all threads to finish
+    
+        while(finished.load()!=tasks_created) {} //wait for all threads to finish
     
         finished.store(0); //reset barrier
         for (auto i=found_sccs;i!=sccs.size();++i) { //loop over new SCCs added
