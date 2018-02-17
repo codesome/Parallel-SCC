@@ -100,6 +100,9 @@ int main(int argc, char const *argv[]) {
     
     std::vector<std::vector<int>> sccs; //output list
     std::mutex out_lk; //used to control access to the output list
+
+    int n_threads = argc>2? atoi(argv[2]): 8;
+    task_queue tq(n_threads);
     
     auto phase_one_single_iter=[&changeflag,&registers](int node_num,node& selfref,int own_val){
         for (int i : selfref.succs) {
@@ -162,7 +165,6 @@ int main(int argc, char const *argv[]) {
     
     unsigned found_sccs=0;
     auto start_time = std::chrono::high_resolution_clock::now(); //start timing
-    task_queue tq;
     
     while (active_workers.size()) { //while graph is non-empty
     

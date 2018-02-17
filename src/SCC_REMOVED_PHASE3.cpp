@@ -165,9 +165,10 @@ int main(int argc, char const *argv[]) {
     }
     
     unsigned found_sccs=0;
-    auto start_time = std::chrono::high_resolution_clock::now(); //start timing
-    task_queue tq;
+    int n_threads = argc>2? atoi(argv[2]): 8;
+    task_queue tq(n_threads);
     
+    auto start_time = std::chrono::high_resolution_clock::now(); //start timing
     while (active_workers.size()) { //while graph is non-empty
     
         for (auto& pair : registers) { //initialize registers with node's colors

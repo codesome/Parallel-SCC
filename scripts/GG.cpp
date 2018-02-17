@@ -41,7 +41,7 @@ int main(int argc, char const *argv[]) {
         }
         file << count;
         for(int e : edges) {
-            file << " " << e;
+            file << " " << e+1;
         }
         file << "\n";
     }

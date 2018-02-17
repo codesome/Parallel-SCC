@@ -101,6 +101,9 @@ int main(int argc, char const *argv[]) {
         registers.emplace(i,std::make_unique<std::atomic<int>>(0));
     }
     
+    int n_threads = argc>2? atoi(argv[2]): 8;
+    task_queue tq(n_threads);
+
     std::vector<std::vector<int>> sccs; //output list
     std::mutex out_lk; //used to control access to the output list
     
@@ -165,7 +168,6 @@ int main(int argc, char const *argv[]) {
     
     unsigned found_sccs=0;
     auto start_time = std::chrono::high_resolution_clock::now(); //start timing
-    task_queue tq;
     
     while (active_workers.size()) { //while graph is non-empty
     

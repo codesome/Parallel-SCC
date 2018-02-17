@@ -110,7 +110,8 @@ int main(int argc, char const *argv[]) {
         }
     }
 
-    task_queue tq(n);
+    int n_threads = argc>2? atoi(argv[2]): 8;
+    task_queue tq(n, n_threads);
     bool empty;
     // AtomicEnDqQueue<std::function<void()>>* tasks = tq.getTaskQueuePointer();
 

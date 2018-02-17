@@ -110,9 +110,11 @@ int main(int argc, char const *argv[]) {
             }
         }
     }
-    int task_pool_step = argc>2? atoi(argv[2]):10000;
 
-    task_queue tq(n/task_pool_step);
+    int n_threads = argc>2? atoi(argv[2]): 8;
+    int task_pool_step = argc>3? atoi(argv[3]):10000;
+    task_queue tq(n/task_pool_step, n_threads);
+
     bool empty;
     moodycamel::ConcurrentQueue<std::function<void()>>* tasks = tq.getTaskQueuePointer();
 

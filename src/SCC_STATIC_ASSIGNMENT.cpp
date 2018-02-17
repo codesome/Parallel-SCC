@@ -95,8 +95,11 @@ int main(int argc, char const *argv[]) {
             }
         }
     }
-    int task_pool_step = argc>2? atoi(argv[2]):10000;
     
+    int n_threads = argc>2? atoi(argv[2]): 8;
+    task_queue tq(n_threads);
+    
+    int task_pool_step = argc>3? atoi(argv[3]):10000;
 
     std::atomic<bool> changeflag(false); //used to track if any colors changed
     std::map<int,std::unique_ptr<std::atomic<int>>> registers; //registers used for propagation
@@ -169,7 +172,6 @@ int main(int argc, char const *argv[]) {
     
     unsigned found_sccs=0;
     auto start_time = std::chrono::high_resolution_clock::now(); //start timing
-    task_queue tq;
     
     while (active_workers.size()) { //while graph is non-empty
         int aw_size = active_workers.size();

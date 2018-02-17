@@ -99,10 +99,12 @@ int main(int argc, char const *argv[]) {
             }
         }
     }
-    int task_pool_step = argc>2? atoi(argv[2]):10000;
 
-    task_queue tq;
+    int n_threads = argc>2? atoi(argv[2]): 8;
+    task_queue tq(n_threads);
+    
     bool empty;
+    int task_pool_step = argc>3? atoi(argv[3]):10000;
     AtomicEnDqQueue<std::function<void()>>* tasks = tq.getTaskQueuePointer();
 
     std::atomic<bool> changeflag(false); //used to track if any colors changed

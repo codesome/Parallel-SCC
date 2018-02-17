@@ -1,4 +1,5 @@
 cmake_minimum_required (VERSION 2.6)
+set (CMAKE_CXX_STANDARD 14)
 
 project (SCC)
 
@@ -46,8 +47,14 @@ add_executable(MAIN_THREAD_STATIC_NQUEUE
 	src/SCC_MAIN_THREAD_STATIC_NQUEUE.cpp
 )
 
+set_source_files_properties(scripts/GenerateGraph.cpp PROPERTIES COMPILE_FLAGS -O3)
 add_executable(GenerateGraph 
 	scripts/GenerateGraph.cpp
+)
+
+set_source_files_properties(scripts/GG.cpp PROPERTIES COMPILE_FLAGS -O3)
+add_executable(GG 
+	scripts/GG.cpp
 )
 
 target_link_libraries (SCC pthread)
