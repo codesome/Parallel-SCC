@@ -232,7 +232,15 @@ int main(int argc, char const *argv[]) {
     double micro_sec = std::chrono::duration_cast<std::chrono::microseconds>(stop_time-start_time).count();
     std::cout<<"Time: "<< micro_sec/1e6 <<"\n";
     tq.stop(); //stop the thread pool's execution
+
+
     
+    // for(int i=0; i<sccs.size(); i++) {
+    //     sort(sccs[i].begin(), sccs[i].end());
+    // }
+    // sort(sccs.begin(), sccs.end(), [](const std::vector<int>& a, const std::vector<int>& b) {
+    //     return a[0] < b[0];
+    // });
     // for (const auto& elem : sccs) { //print found sccs
     //     for (const auto& inner_elem : elem) {
     //         std::cout<<inner_elem<<" ";
@@ -240,4 +248,5 @@ int main(int argc, char const *argv[]) {
     //     std::cout<<"\n";
     // }
     
+    std::cout << "Size: " << sccs.size() << std::endl;
 }

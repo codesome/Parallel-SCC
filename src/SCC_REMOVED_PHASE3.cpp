@@ -171,8 +171,8 @@ int main(int argc, char const *argv[]) {
     auto start_time = std::chrono::high_resolution_clock::now(); //start timing
     while (active_workers.size()) { //while graph is non-empty
     
-        for (auto& pair : registers) { //initialize registers with node's colors
-            pair.second->store(pair.first);
+        for (auto i : active_workers) { //initialize registers with node's colors
+            registers[i]->store(i);
         }
     
         std::atomic<int> finished(0); //used like a barrier

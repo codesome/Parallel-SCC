@@ -102,7 +102,7 @@ int main(int argc, char const *argv[]) {
     }
 
     int n_threads = argc>2? atoi(argv[2]): 8;
-    task_queue tq(n_threads);
+    task_queue tq(n_threads-1);
     bool empty;
     AtomicEnDqQueue<std::function<void()>>* tasks = tq.getTaskQueuePointer();
 
@@ -180,8 +180,8 @@ int main(int argc, char const *argv[]) {
     
     while (active_workers.size()) { //while graph is non-empty
     
-        for (auto& pair : registers) { //initialize registers with node's colors
-            pair.second->store(pair.first);
+        for (auto i : active_workers) { //initialize registers with node's colors
+            registers[i]->store(i);
         }
     
         std::atomic<int> finished(0); //used like a barrier

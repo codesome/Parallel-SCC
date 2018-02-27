@@ -101,7 +101,7 @@ int main(int argc, char const *argv[]) {
     }
 
     int n_threads = argc>2? atoi(argv[2]): 8;
-    task_queue tq(n_threads);
+    task_queue tq(n_threads-1);
     
     bool empty;
     int task_pool_step = argc>3? atoi(argv[3]):10000;
@@ -182,8 +182,8 @@ int main(int argc, char const *argv[]) {
     while (active_workers.size()) { //while graph is non-empty
         int aw_size = active_workers.size();
         int tasks_created;
-        for (auto& pair : registers) { //initialize registers with node's colors
-            pair.second->store(pair.first);
+        for (auto i : active_workers) {
+            registers[i]->store(i);
         }
     
         std::atomic<int> finished(0); //used like a barrier
@@ -233,7 +233,7 @@ int main(int argc, char const *argv[]) {
                 int trip_count = task_pool_step<(aw_size-i)? task_pool_step:(aw_size-i);
                 for(int j=0; j<trip_count; j++) {
                     int node_num=*it;
-                    node& selfref = graph[i];
+                    node& selfref = graph[node_num];
                     phase_two(node_num,selfref);
                     ++it;
                 }
@@ -272,11 +272,19 @@ int main(int argc, char const *argv[]) {
     std::cout<<"Time: "<< micro_sec/1e6 <<"\n";
     tq.stop(); //stop the thread pool's execution
     
+    // for(int i=0; i<sccs.size(); i++) {
+    //     sort(sccs[i].begin(), sccs[i].end());
+    // }
+    // sort(sccs.begin(), sccs.end(), [](const std::vector<int>& a, const std::vector<int>& b) {
+    //     return a[0] < b[0];
+    // });
     // for (const auto& elem : sccs) { //print found sccs
     //     for (const auto& inner_elem : elem) {
     //         std::cout<<inner_elem<<" ";
     //     }
     //     std::cout<<"\n";
     // }
+    
+    std::cout << "Size: " <<  sccs.size() << std::endl;
     
 }
