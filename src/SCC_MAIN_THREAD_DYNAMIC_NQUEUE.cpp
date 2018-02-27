@@ -113,7 +113,7 @@ int main(int argc, char const *argv[]) {
     int n_threads = argc>2? atoi(argv[2]): 8;
     task_queue tq(n, n_threads-1);
     bool empty;
-    // AtomicEnDqQueue<std::function<void()>>* tasks = tq.getTaskQueuePointer();
+    moodycamel::ConcurrentQueue<std::function<void()>>* tasks = tq.getTaskQueuePointer();
 
     std::atomic<bool> changeflag(false); //used to track if any colors changed
     std::map<int,std::unique_ptr<std::atomic<int>>> registers; //registers used for propagation
@@ -209,14 +209,21 @@ int main(int argc, char const *argv[]) {
                 tq.add_task(task); //schedule task
             }
     
-            // while(true) {
-            //     std::function<void()> task = tasks->weak_dequeue(empty);
-            //     if(empty) {
-            //         break;
-            //     } else {
-            //         task();
-            //     }
-            // }
+            while(true) {
+                std::function<void()> task;
+                empty = false;
+                while(!tasks->try_dequeue(task)) {
+                    if(tasks->size_approx()==0) {
+                        empty = true;
+                        break;
+                    }
+                }
+                if(empty) {
+                    break;
+                } else {
+                    task();
+                }
+            }
 
             while (finished.load()!=active_workers.size()) {} //wait for all threads to complete the iteration
     
@@ -234,14 +241,21 @@ int main(int argc, char const *argv[]) {
             tq.add_task(task);
         }
 
-        // while(true) {
-        //     std::function<void()> task = tasks->weak_dequeue(empty);
-        //     if(empty) {
-        //         break;
-        //     } else {
-        //         task();
-        //     }
-        // }
+        while(true) {
+            std::function<void()> task;
+            empty = false;
+            while(!tasks->try_dequeue(task)) {
+                if(tasks->size_approx()==0) {
+                    empty = true;
+                    break;
+                }
+            }
+            if(empty) {
+                break;
+            } else {
+                task();
+            }
+        }
 
         while(finished.load()!=active_workers.size()) {} //wait for all threads to finish
     
