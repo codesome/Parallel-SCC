@@ -6,7 +6,7 @@
 #include <random>
 int main(int argc, char** argv) {
     if (argc!=6) {
-        std::cout<<"Usage: "<<argv[0]<<" number_of_sccs dag_density dag_strength mean_scc_size outputfilename\n";
+        std::cout<<"Usage: "<<argv[0]<<" number_of_sccs dag_density dag_strength (mean_scc_size-1) outputfilename\n";
         return 1;
     }
     auto scc_num=std::atoi(argv[1]);
@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
     std::vector<std::vector<std::vector<int>>> dag_nodes;
     std::poisson_distribution<> size_distro(mean_scc_size);
     for (auto i=0;i!=scc_num;++i) {
-        auto scc_size=size_distro(engine);
+        auto scc_size=size_distro(engine)+1;
         std::vector<std::vector<int>> scc;
         scc.resize(scc_size);
         for (auto j=0;j!=scc_size;++j) {
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
     for (auto i=0;i!=scc_num;++i) {
         for (auto j=0;j!=dag_nodes[i].size();++j) {
             for (auto k=0;k!=dag_nodes[i][j].size();++k) {
-                adj_list[resolver[std::make_tuple(i,j)]].emplace_back(resolver[std::make_tuple(i,k)]);
+                adj_list[resolver[std::make_tuple(i,j)]].emplace_back(resolver[std::make_tuple(i,dag_nodes[i][j][k])]);
             }
         }
     }
@@ -107,7 +107,7 @@ int main(int argc, char** argv) {
         for (auto j=0;j!=dag_adj_list[i].size();++j) {
             std::vector<std::tuple<int,int>> edges;
             auto sz1=dag_nodes[i].size();
-            auto sz2=dag_nodes[j].size();
+            auto sz2=dag_nodes[dag_adj_list[i][j]].size();
             std::uniform_int_distribution<> srcpicker(0,sz1-1);
             std::uniform_int_distribution<> destpicker(0,sz2-1);
             std::poisson_distribution<> cross_edge_distro(sz1*sz2*dag_strength);
@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
             for (auto k=0;k!=tries;++k) {
                 auto left=srcpicker(engine);
                 auto right=destpicker(engine);
-                edges.emplace_back(std::make_tuple(resolver[std::make_tuple(i,left)],resolver[std::make_tuple(j,right)]));
+                edges.emplace_back(std::make_tuple(resolver[std::make_tuple(i,left)],resolver[std::make_tuple(dag_adj_list[i][j],right)]));
             }
             std::sort(std::begin(edges),std::end(edges));
             auto last=std::unique(std::begin(edges),std::end(edges));
