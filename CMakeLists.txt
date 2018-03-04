@@ -23,6 +23,10 @@ add_executable(MAIN_THREAD_STATIC_NQUEUE
 	src/SCC_MAIN_THREAD_STATIC_NQUEUE.cpp
 )
 
+add_executable(STATIC_NXT
+	src/SCC_STATIC_NXT.cpp
+)
+
 set_source_files_properties(scripts/GenerateGraph.cpp PROPERTIES COMPILE_FLAGS -O3)
 add_executable(GenerateGraph 
 	scripts/GenerateGraph.cpp
@@ -38,5 +42,6 @@ target_link_libraries (MAIN_THREAD_STATIC pthread)
 target_link_libraries (MAIN_THREAD_DYNAMIC pthread)
 target_link_libraries (MAIN_THREAD_DYNAMIC_NQUEUE pthread)
 target_link_libraries (MAIN_THREAD_STATIC_NQUEUE pthread)
+target_link_libraries (STATIC_NXT pthread)
 
 include_directories("./include")
