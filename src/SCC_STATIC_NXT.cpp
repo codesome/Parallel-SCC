@@ -120,24 +120,30 @@ int main(int argc, char const *argv[]) {
 
     std::atomic<bool> changeflag(false); //used to track if any colors changed
     // std::map<int,std::unique_ptr<std::atomic<int>>> registers; //registers used for propagation
-    std::vector<std::unique_ptr<std::atomic<int>>> registers; //registers used for propagation
+    std::unique_ptr<std::atomic<int>[]> registers; //registers used for propagation
+    std::unique_ptr<std::atomic<bool>[]> changed_now, changed_prev; //registers used for propagation
     
-    for (auto i=1;i!=n+1;++i) { //zero-initialize the registers
-        registers.emplace_back(std::make_unique<std::atomic<int>>(0));
+    registers = std::make_unique<std::atomic<int>[]>(n);
+    changed_now = std::make_unique<std::atomic<bool>[]>(n);
+    changed_prev = std::make_unique<std::atomic<bool>[]>(n);
+    for (auto i=0;i!=n;++i) { //zero-initialize the registers
+        changed_now[i] = false;
+        changed_prev[i] = true;
     }
     
     std::vector<std::vector<int>> sccs; //output list
     std::mutex out_lk; //used to control access to the output list
     
-    auto phase_one_single_iter=[&changeflag,&registers](int node_num,node& selfref,int own_val){
+    auto phase_one_single_iter=[&changeflag,&registers,&changed_now](int node_num,node& selfref,int own_val){
         for (int i : selfref.succs) {
             auto& succreg=registers[i-1]; //get reference to child's register
             
             while (true) {
-                auto val = succreg->load(); //read value from child's register
+                auto val = succreg.load(); //read value from child's register
                 if (val<own_val) { //own color is greater than child's
-                    auto res= succreg->compare_exchange_strong(val,own_val); //attempt propagation
+                    auto res= succreg.compare_exchange_strong(val,own_val); //attempt propagation
                     if (res) { //succeeded in propagating
+                        changed_now[i-1].store(true);
                         changeflag.store(true); //notify change
                         break;
                     } //else retry, as some other thread managed to alter register
@@ -150,14 +156,14 @@ int main(int argc, char const *argv[]) {
     };
     
     auto phase_two=[&registers,&graph,&sccs,&out_lk,n](int node_num,node& selfref){
-        if (registers[node_num-1]->load()==node_num) { //is a root of an SCC
+        if (registers[node_num-1].load()==node_num) { //is a root of an SCC
             std::set<int> visited; //track nodes visited in reversed BFS
             std::queue<int> to_visit; //queue for BFS
             std::vector<int> scc; //list of nodes in the SCC
             visited.insert(node_num); //mark self as visited
             scc.push_back(node_num); //add self to SCC
 
-            registers[node_num-1]->store(n+1);
+            registers[node_num-1].store(n+1);
             
             for (int i : selfref.preds) {
                 to_visit.push(i);
@@ -167,9 +173,9 @@ int main(int argc, char const *argv[]) {
             while (!to_visit.empty()) { //there are still nodes to visit
                 int x = to_visit.front(); //remove node from queue
                 to_visit.pop();
-                if (registers[x-1]->load()==node_num) { //if visited node has root's color
+                if (registers[x-1].load()==node_num) { //if visited node has root's color
                     scc.push_back(x); //add to scc
-                    registers[x-1]->store(n+1);
+                    registers[x-1].store(n+1);
                     for (int i : graph[x].preds) { //add its reverse children
                         if (visited.find(i)==std::end(visited)) { //if not already visited
                             visited.insert(i);
@@ -199,13 +205,17 @@ int main(int argc, char const *argv[]) {
         int aw_size = active_workers.size();
         int tasks_created;
         for (auto i : active_workers) { //initialize registers with node's colors
-            registers[i-1]->store(i);
+            registers[i-1].store(i);
         }
     
         std::atomic<int> finished(0); //used like a barrier
         do {
             changeflag.store(false);
             finished.store(0);
+
+            for (int i = 0; i < n; ++i) {
+                changed_now[i].store(false);
+            }
     
             tasks_created = 0;
             for (int i=0; i<aw_size; i+=task_pool_step) {
@@ -214,9 +224,11 @@ int main(int argc, char const *argv[]) {
                     int trip_count = task_pool_step<(aw_size-i)? task_pool_step:(aw_size-i);
                     for(int j=0; j<trip_count; j++) {
                         int node_num=*it;
-                        node& selfref=graph[node_num];
-                        int own_val=registers[node_num-1]->load();
-                        phase_one_single_iter(node_num,selfref,own_val);
+                        if(changed_prev[node_num-1].load()) {
+                            node& selfref=graph[node_num];
+                            int own_val=registers[node_num-1].load();
+                            phase_one_single_iter(node_num,selfref,own_val);
+                        }
                         ++it;
                     }
                     ++finished;
@@ -243,6 +255,8 @@ int main(int argc, char const *argv[]) {
 
             while (finished.load()!=tasks_created) {} //wait for all threads to complete the iteration
     
+            std::swap(changed_now, changed_prev);
+
         } while(changeflag.load()); //until graph reaches stable state
     
         finished.store(0); //reset barrier
