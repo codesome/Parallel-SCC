@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <numeric>
 #include <random>
 int main(int argc, char** argv) {
     if (argc!=6) {
@@ -128,13 +129,28 @@ int main(int argc, char** argv) {
     //finally construct the real graph
     std::ofstream writer(argv[5]);
     writer<<adj_list.size()<<"\n";
+    std::vector<int> wholes;
+    wholes.reserve(adj_list.size());
+    int countershock=0;
+    std::generate_n(std::back_inserter(wholes),adj_list.size(),[&countershock](){return ++countershock;});
+    std::shuffle(std::begin(wholes),std::end(wholes),engine);
+    std::vector<std::vector<int>> outlist;
     for (auto i=0;i!=adj_list.size();++i) {
-        std::sort(std::begin(adj_list[i]),std::end(adj_list[i]));
-        auto last=std::unique(std::begin(adj_list[i]),std::end(adj_list[i]));
-        adj_list[i].erase(last,std::end(adj_list[i]));
-        writer<<adj_list[i].size()<<" ";
-        for (auto j=0;j!=adj_list[i].size();++j) {
-            writer<<adj_list[i][j]+1<<" ";
+        outlist.emplace_back();
+    }
+    for (auto i=0;i!=adj_list.size();++i) {
+        auto target=wholes[i];
+        for (auto& elem : adj_list[i]) {
+            outlist[target].emplace_back(wholes[elem]);
+        }
+        std::sort(std::begin(outlist[target]),std::end(outlist[target]));
+        auto last = std::unique(std::begin(outlist[target]),std::end(outlist[target]));
+        outlist[target].erase(last,std::end(outlist[target]));
+    }
+    for (auto i=0;i!=outlist.size();++i) {
+        writer<<outlist[i].size()<<" ";
+        for (auto j=0;j!=outlist[i].size();++j) {
+            writer<<outlist[i][j]+1<<" ";
         }
         writer<<"\n";
     }
