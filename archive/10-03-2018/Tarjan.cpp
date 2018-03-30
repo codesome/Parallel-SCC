@@ -7,7 +7,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <chrono>
 struct vertex {
     std::vector<int> succs;
     int index;
@@ -95,19 +94,13 @@ int main(int argc, char** argv) {
             G.verts.emplace_back(std::move(dests));
         }
     }
-    auto start_time = std::chrono::high_resolution_clock::now(); //start timing
     auto sccs=tarjan(G);
-    auto stop_time = std::chrono::high_resolution_clock::now(); //start timing
-    
-
-    double micro_sec = std::chrono::duration_cast<std::chrono::microseconds>(stop_time-start_time).count();
-    std::cout<<"Time: "<< micro_sec/1e6 <<"\n";
-    std::cout<<"Size: " <<sccs.size()<<"\n";
-    // std::sort(std::begin(sccs),std::end(sccs),[](const auto& vec1, const auto& vec2){ return vec1[0] < vec2[0];});
-    // for (auto ind=0u;ind!=sccs.size();++ind) {
-    //     for (auto elem : sccs[ind]) {
-    //         std::cout<<elem+1<<" ";
-    //     }
-    //     std::cout<<"\n";
-    // }
+    std::cout<<sccs.size()<<"\n";
+    std::sort(std::begin(sccs),std::end(sccs),[](const auto& vec1, const auto& vec2){ return vec1[0] < vec2[0];});
+    for (auto ind=0u;ind!=sccs.size();++ind) {
+        for (auto elem : sccs[ind]) {
+            std::cout<<elem+1<<" ";
+        }
+        std::cout<<"\n";
+    }
 }

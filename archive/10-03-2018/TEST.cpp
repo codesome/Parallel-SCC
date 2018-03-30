@@ -13,6 +13,7 @@
 #include <tuple>
 #include <vector>
 #include <semaphore.h>
+#include "AtomicQueue.h"
 #include "concurrentqueue.h"
 
 struct node { //used for each node of the graph
