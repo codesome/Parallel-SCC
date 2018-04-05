@@ -21,7 +21,6 @@ struct node { //used for each node of the graph
     bool onStack;
     node(): index(-1), lowlink(-1), onStack(false) {}
     node(int index): index(index), lowlink(-1), onStack(false) {}
-    std::vector<int> preds; //set of all predecessors
     std::vector<int> succs; //set of all successors
 };
 
@@ -45,29 +44,27 @@ int main(int argc, char const *argv[]) {
             reader >> local; //other end of edge
             if (local != i + 1) { //insert into the graph
                 graph[i].succs.emplace_back(local - 1);
-                graph[local - 1].preds.emplace_back(i);
             }
         }
     }
-
+    
     int n_cuts = argc > 2 ? atoi(argv[2]) : 8;
     int step = n / n_cuts;
 
     auto start_time = std::chrono::high_resolution_clock::now(); //start timing
 
     std::vector<int> scc_uf(n);
-    std::mutex ng_mtx;
 
     std::atomic_int scc_ids(0);
-    std::vector<std::vector<std::pair<int, int>>> cross_edges_global;
-    std::vector<std::map<int, node>> new_graph_global;
+    // std::vector<std::vector<std::pair<int, int>>> cross_edges_global(n_cuts);
+    std::vector<std::map<int, node>> new_graph_global(n_cuts);
     std::atomic_int nodes_added(0);
 
-    /*===============================PHASE 1=============================================*/
+    /*===============================PHASE 1===============================*/
     std::function<void(int)> thread_task =
-        [&nodes_added, n, n_cuts, step, &graph, &scc_uf, &scc_ids, &cross_edges_global, &new_graph_global]
+        [&nodes_added, n, n_cuts, step, &graph, &scc_uf, &scc_ids, &new_graph_global]
     (int thread_id) {
-
+        int sccfound = 0;
         std::map<int, node> &local_nodes = new_graph_global[thread_id];
 
         int start_index = thread_id * step;
@@ -78,7 +75,7 @@ int main(int argc, char const *argv[]) {
             end_index = (thread_id + 1) * step;
         }
 
-        std::vector<std::pair<int, int>> &cross_edges = cross_edges_global[thread_id];
+        // std::vector<std::pair<int, int>> &cross_edges = cross_edges_global[thread_id];
 
         // Tarjan
         {
@@ -90,7 +87,7 @@ int main(int argc, char const *argv[]) {
             unsigned widx;
             int w;
             auto strongconnect =
-            [&nodes_added, &index, &graph, &S, &retval, &v, &widx, &w, &callstack, &scc_uf, &cross_edges, start_index, end_index, &scc_ids, &local_nodes]() -> void {
+            [&sccfound, &nodes_added, &index, &graph, &S, &retval, &v, &widx, &w, &callstack, &scc_uf, start_index, end_index, &scc_ids, &local_nodes]() -> void {
 startlabel:
                 graph[v].index = index;
                 graph[v].lowlink = index;
@@ -100,7 +97,7 @@ startlabel:
                 for (widx = 0u; widx != graph[v].succs.size(); ++widx) {
                     w = graph[v].succs[widx];
                     if (w < start_index || w >= end_index) {
-                        cross_edges.emplace_back(v, w);
+                        // cross_edges.emplace_back(v, w);
                         continue;
                     }
                     if (graph[w].index == -1) {
@@ -122,6 +119,7 @@ endlabel:
                 if (graph[v].lowlink == graph[v].index) {
                     int w;
                     int my_scc_id = scc_ids++;
+                    sccfound++;
                     do {
                         w = S.top();
                         S.pop();
@@ -143,13 +141,12 @@ endlabel:
             }
         }
 
+        // printf("thread%d: SCC=%d, %d %d\n", thread_id, sccfound, start_index, end_index);
 
     };
 
     std::vector<std::thread> workers;
 
-    cross_edges_global.resize(n_cuts);
-    new_graph_global.resize(n_cuts);
     for (int i = 0; i < n_cuts; ++i) {
         workers.emplace_back([](std::function<void(int)> task, int thread_id) {
             task(thread_id);
@@ -160,10 +157,11 @@ endlabel:
         iter->join();
     }
 
+    // printf("Before %d\n", scc_ids.load() );
     // TODO: keep phase 1 and 2 in single thread and use barriers
-    /*===============================PHASE 2=============================================*/
+    /*===============================PHASE 2===============================*/
     std::function<void(int)> thread_task2 =
-        [n, n_cuts, step, &scc_uf, &cross_edges_global, &new_graph_global]
+        [&graph, n, n_cuts, step, &scc_uf, &new_graph_global]
     (int thread_id) {
 
         std::map<int, node> &local_nodes = new_graph_global[thread_id];
@@ -176,13 +174,19 @@ endlabel:
             end_index = (thread_id + 1) * step;
         }
 
-        std::vector<std::pair<int, int>> &cross_edges = cross_edges_global[thread_id];
+        // std::vector<std::pair<int, int>> &cross_edges = cross_edges_global[thread_id];
 
-        for (auto& p : cross_edges) {
-            int scc_id = scc_uf[p.first];
-            // printf("%d:%d ",p.first,scc_id);
-            local_nodes[scc_id].succs.push_back(scc_uf[p.second]);
+        for(int i=start_index; i!=end_index; i++) {
+            int scc_id = scc_uf[i];
+            for(auto v: graph[i].succs) {
+                local_nodes[scc_id].succs.push_back(scc_uf[v]);
+            }
         }
+        // for (auto& p : cross_edges) {
+        //     int scc_id = scc_uf[p.first];
+        //     local_nodes[scc_id].succs.push_back(scc_uf[p.second]);
+        //     printf("%d->%d\n",p.first,p.second);
+        // }
 
     };
 
@@ -198,7 +202,7 @@ endlabel:
         iter->join();
     }
 
-    /*===============================PHASE 3=============================================*/
+    /*===============================PHASE 3===============================*/
 
     int new_n = scc_ids.load();
     std::vector<node> new_graph;
@@ -214,15 +218,22 @@ endlabel:
         return a.index < b.index;
     });
 
+    // for(auto nd: new_graph) {
+    //     printf("Node=%d, ", nd.index);
+    //     for(auto su: nd.succs) {
+    //         printf("%d ", su);
+    //     }
+    //     printf("\n");
+    // }
+
     for (auto& n : new_graph) {
         n.index = -1;
     }
 
     std::swap(graph, new_graph);
 
+
     // Tarjan
-    // TODO: use result of this Tarjan and get final SCC
-    std::vector<int> scc_index_map(new_n);
     std::vector<std::vector<int>> retval;
     {
         int index = 0;
@@ -233,7 +244,7 @@ endlabel:
         int w;
         auto strongconnect =
         [&index, &graph, &S, &retval, &v, &widx, &w, &callstack]() -> void {
-startlabel:
+startlabel_last:
             graph[v].index = index;
             graph[v].lowlink = index;
             ++index;
@@ -244,8 +255,8 @@ startlabel:
                 if (graph[w].index == -1) {
                     callstack.push(std::make_tuple(v, widx, w));
                     v = w;
-                    goto startlabel;
-endlabel:
+                    goto startlabel_last;
+endlabel_last:
                     auto temp = callstack.top();
                     callstack.pop();
                     v = std::get<0>(temp);
@@ -269,7 +280,7 @@ endlabel:
                 retval.emplace_back(std::move(scc));
             }
             if (!callstack.empty()) {
-                goto endlabel;
+                goto endlabel_last;
             }
         };
         for (auto i = 0; i != new_n; ++i) {
@@ -283,6 +294,7 @@ endlabel:
 
 
 
+    std::vector<int> scc_index_map(new_n);
     int idx = 0;
     for (auto& v : retval) {
         for (auto& i : v) {

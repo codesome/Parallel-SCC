@@ -74,7 +74,7 @@ endlabel: auto temp = callstack.top();
     return retval;
 }
 int main(int argc, char** argv) {
-    if (argc != 2) {
+    if (argc < 2) {
         std::cout << "Usage: " << argv[0] << " num_of_vertices";
         return -1;
     }
@@ -83,13 +83,28 @@ int main(int argc, char** argv) {
         std::ifstream reader(argv[1]);
         int V, edgecount;
         reader >> V;
-        for (auto i = 0; i != V; ++i) {
+        int start = 0;
+        if (argc > 3) {
+            start = atoi(argv[2]);
+            V = atoi(argv[3]);
+            if (V < start) return 0;
+        }
+        for(int i=0; i<start; i++) {
+            int temp;
+            reader >> edgecount;
+            for (auto j = 0; j != edgecount; ++j) {
+                reader >> temp;
+            }
+        }
+        for (auto i = start; i != V; ++i) {
             reader >> edgecount;
             std::vector<int> dests;
             int temp;
             for (auto j = 0; j != edgecount; ++j) {
                 reader >> temp;
-                dests.emplace_back(temp - 1);
+                if((temp-1) < V && (temp-1) >= start) {
+                    dests.emplace_back(temp - 1 - start);
+                }
             }
             G.verts.emplace_back(std::move(dests));
         }
