@@ -22,7 +22,6 @@ int main(int argc, char const *argv[]) {
     std::atomic_int scc_ids(0);
 
 
-    cross_edges; // all the edges from one graph to another graph cut (vector of vector)
     new_nodes; // new nodes that will be formed after running Tarjan on graph cuts (vector of vector)
 
     // for all n_cut number of threads thread
@@ -34,17 +33,14 @@ int main(int argc, char const *argv[]) {
         int start_index = thread_id*step;
         int end_index = (thread_id==n_cuts-1)? n: (thread_id+1)*step;
         
-        local_cross_edges; // same as cross_edges but local to thread (vector in the (vector of vector))
         local_new_nodes; // same as new_nodes but local to thread (vector in the (vector of vector))
 
         { // Run Tarjan on the 'graph'
             #Some functions that happen inside Tarjan:
                 1. For and edge u->v
                     If (v < start_index || v >= end_index) // outside the cut
+                        - We ignore this edge in this Tarjan as its outside the cut
                     And (start_index <= u < end_index) // inside the cut
-                    Then the edge u->v is said to be cross edge
-
-                    local_cross_edges.add(edge(u,v))
 
                 2. When we find a scc
 
@@ -61,11 +57,12 @@ int main(int argc, char const *argv[]) {
 
         /*===============================PHASE 2===============================*/
 
-        for (edge e in local_cross_edges) {
+        for (edge e in succ of all the nodes in this cut) {
             scc_id = scc_uf[e.source];
 
             // adding successor for the new graph using cross edge
-            local_new_nodes[scc_id].succs.add(scc_uf[e.destination]);
+            if(source and destination SCC are not same, i.e. no self edge)
+                local_new_nodes[scc_id].succs.add(scc_uf[e.destination]);
         }
 
         // by using vector in (vector of vector), 

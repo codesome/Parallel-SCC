@@ -179,7 +179,10 @@ endlabel:
         for(int i=start_index; i!=end_index; i++) {
             int scc_id = scc_uf[i];
             for(auto v: graph[i].succs) {
-                local_nodes[scc_id].succs.push_back(scc_uf[v]);
+                int succ_scc_id = scc_uf[v];
+                if(scc_id != succ_scc_id) {
+                    local_nodes[scc_id].succs.push_back(succ_scc_id);
+                }
             }
         }
         // for (auto& p : cross_edges) {
