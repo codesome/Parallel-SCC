@@ -24,6 +24,11 @@ struct node { //used for each node of the graph
     std::vector<int> succs; //set of all successors
 };
 
+struct tuple_iii {
+    int get0, get1, get2;
+    tuple_iii(int g0, int g1, int g2): get0(g0), get1(g1), get2(g2) {}
+};
+
 int main(int argc, char const *argv[]) {
     const char *file_name = argc > 1 ? argv[1] : "graph.txt";
 
@@ -64,7 +69,6 @@ int main(int argc, char const *argv[]) {
     std::function<void(int)> thread_task =
         [&nodes_added, n, n_cuts, step, &graph, &scc_uf, &scc_ids, &new_graph_global]
     (int thread_id) {
-        int sccfound = 0;
         std::map<int, node> &local_nodes = new_graph_global[thread_id];
 
         int start_index = thread_id * step;
@@ -75,19 +79,17 @@ int main(int argc, char const *argv[]) {
             end_index = (thread_id + 1) * step;
         }
 
-        // std::vector<std::pair<int, int>> &cross_edges = cross_edges_global[thread_id];
-
         // Tarjan
         {
             int index = 0;
             std::stack<int> S;
             std::vector<std::vector<int>> retval;
-            std::stack<std::tuple<int, int, int>> callstack;
+            std::stack<tuple_iii> callstack;
             int v;
             unsigned widx;
             int w;
             auto strongconnect =
-            [&sccfound, &nodes_added, &index, &graph, &S, &retval, &v, &widx, &w, &callstack, &scc_uf, start_index, end_index, &scc_ids, &local_nodes]() -> void {
+            [&nodes_added, &index, &graph, &S, &retval, &v, &widx, &w, &callstack, &scc_uf, start_index, end_index, &scc_ids, &local_nodes]() -> void {
 startlabel:
                 graph[v].index = index;
                 graph[v].lowlink = index;
@@ -96,30 +98,26 @@ startlabel:
                 graph[v].onStack = true;
                 for (widx = 0u; widx != graph[v].succs.size(); ++widx) {
                     w = graph[v].succs[widx];
-                    if (w < start_index || w >= end_index) {
-                        // cross_edges.emplace_back(v, w);
-                        continue;
-                    }
-                    if (graph[w].index == -1) {
-                        callstack.push(std::make_tuple(v, widx, w));
-                        v = w;
-                        goto startlabel;
+                    if (w >= start_index && w < end_index) {
+                        if (graph[w].index == -1) {
+                            callstack.push(tuple_iii( v, widx, w));
+                            v = w;
+                            goto startlabel;
 endlabel:
-                        auto temp = callstack.top();
-                        callstack.pop();
-                        v = std::get<0>(temp);
-                        widx = std::get<1>(temp);
-                        w = std::get<2>(temp);
-                        graph[v].lowlink = std::min(graph[v].lowlink, graph[w].lowlink);
-                    }
-                    else if (graph[w].onStack) {
-                        graph[v].lowlink = std::min(graph[v].lowlink, graph[w].index);
+                            auto temp = callstack.top();
+                            callstack.pop();
+                            v = temp.get0;
+                            widx = temp.get1;
+                            w = temp.get2;
+                            graph[v].lowlink = std::min(graph[v].lowlink, graph[w].lowlink);
+                        } else if (graph[w].onStack) {
+                            graph[v].lowlink = std::min(graph[v].lowlink, graph[w].index);
+                        }
                     }
                 }
                 if (graph[v].lowlink == graph[v].index) {
                     int w;
                     int my_scc_id = scc_ids++;
-                    sccfound++;
                     do {
                         w = S.top();
                         S.pop();
@@ -140,8 +138,6 @@ endlabel:
                 }
             }
         }
-
-        // printf("thread%d: SCC=%d, %d %d\n", thread_id, sccfound, start_index, end_index);
 
     };
 
@@ -174,8 +170,6 @@ endlabel:
             end_index = (thread_id + 1) * step;
         }
 
-        // std::vector<std::pair<int, int>> &cross_edges = cross_edges_global[thread_id];
-
         for(int i=start_index; i!=end_index; i++) {
             int scc_id = scc_uf[i];
             for(auto v: graph[i].succs) {
@@ -185,11 +179,6 @@ endlabel:
                 }
             }
         }
-        // for (auto& p : cross_edges) {
-        //     int scc_id = scc_uf[p.first];
-        //     local_nodes[scc_id].succs.push_back(scc_uf[p.second]);
-        //     printf("%d->%d\n",p.first,p.second);
-        // }
 
     };
 
@@ -212,7 +201,6 @@ endlabel:
     new_graph.reserve(new_n);
     for (auto& thread_nodes : new_graph_global) {
         for (auto& node_pair : thread_nodes) {
-            // printf("%d %d\n", node_pair.first, node_pair.second.index );
             new_graph.emplace_back(std::move(node_pair.second));
         }
     }
@@ -220,14 +208,6 @@ endlabel:
     std::sort(new_graph.begin(), new_graph.end(), [](const node & a, const node & b) {
         return a.index < b.index;
     });
-
-    // for(auto nd: new_graph) {
-    //     printf("Node=%d, ", nd.index);
-    //     for(auto su: nd.succs) {
-    //         printf("%d ", su);
-    //     }
-    //     printf("\n");
-    // }
 
     for (auto& n : new_graph) {
         n.index = -1;
