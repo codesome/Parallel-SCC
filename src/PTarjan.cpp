@@ -63,11 +63,10 @@ int main(int argc, char const *argv[]) {
     std::atomic_int scc_ids(0);
     // std::vector<std::vector<std::pair<int, int>>> cross_edges_global(n_cuts);
     std::vector<std::map<int, node>> new_graph_global(n_cuts);
-    std::atomic_int nodes_added(0);
 
     /*===============================PHASE 1===============================*/
     std::function<void(int)> thread_task =
-        [&nodes_added, n, n_cuts, step, &graph, &scc_uf, &scc_ids, &new_graph_global]
+        [n, n_cuts, step, &graph, &scc_uf, &scc_ids, &new_graph_global]
     (int thread_id) {
         std::map<int, node> &local_nodes = new_graph_global[thread_id];
 
@@ -89,7 +88,7 @@ int main(int argc, char const *argv[]) {
             unsigned widx;
             int w;
             auto strongconnect =
-            [&nodes_added, &index, &graph, &S, &retval, &v, &widx, &w, &callstack, &scc_uf, start_index, end_index, &scc_ids, &local_nodes]() -> void {
+            [&index, &graph, &S, &retval, &v, &widx, &w, &callstack, &scc_uf, start_index, end_index, &scc_ids, &local_nodes]() -> void {
 startlabel:
                 graph[v].index = index;
                 graph[v].lowlink = index;
@@ -124,7 +123,6 @@ endlabel:
                         graph[w].onStack = false;
                         scc_uf[w] = my_scc_id;
                     } while (w != v);
-                    nodes_added++;
                     local_nodes.emplace(std::make_pair(my_scc_id, node(my_scc_id)));
                 }
                 if (!callstack.empty()) {
@@ -153,15 +151,43 @@ endlabel:
         iter->join();
     }
 
+    int new_n = scc_ids.load();
+    std::vector<node> new_graph;
+    new_graph.reserve(new_n);
+    for (auto& thread_nodes : new_graph_global) {
+        for (auto& node_pair : thread_nodes) {
+            new_graph.emplace_back(std::move(node_pair.second));
+        }
+    }
+
+    std::sort(new_graph.begin(), new_graph.end(), [](const node & a, const node & b) {
+        return a.index < b.index;
+    });
+
+    // for (auto& n : new_graph) {
+    //     n.index = -1;
+    // }
+
     // printf("Before %d\n", scc_ids.load() );
     // TODO: keep phase 1 and 2 in single thread and use barriers
     /*===============================PHASE 2===============================*/
     std::function<void(int)> thread_task2 =
-        [&graph, n, n_cuts, step, &scc_uf, &new_graph_global]
+        [&graph, n, n_cuts, step, &scc_uf, &new_graph]
     (int thread_id) {
 
-        std::map<int, node> &local_nodes = new_graph_global[thread_id];
-
+        {
+            int step = new_graph.size()/n_cuts;
+            int si = thread_id * step;
+            int ei;
+            if (thread_id == n_cuts - 1) {
+                ei = new_graph.size();
+            } else {
+                ei = (thread_id + 1) * step;
+            }
+            for(int i=si; i!=ei; i++) {
+                new_graph[i].index = -1;
+            }
+        }
         int start_index = thread_id * step;
         int end_index;
         if (thread_id == n_cuts - 1) {
@@ -175,7 +201,7 @@ endlabel:
             for(auto v: graph[i].succs) {
                 int succ_scc_id = scc_uf[v];
                 if(scc_id != succ_scc_id) {
-                    local_nodes[scc_id].succs.push_back(succ_scc_id);
+                    new_graph[scc_id].succs.push_back(succ_scc_id);
                 }
             }
         }
@@ -195,23 +221,6 @@ endlabel:
     }
 
     /*===============================PHASE 3===============================*/
-
-    int new_n = scc_ids.load();
-    std::vector<node> new_graph;
-    new_graph.reserve(new_n);
-    for (auto& thread_nodes : new_graph_global) {
-        for (auto& node_pair : thread_nodes) {
-            new_graph.emplace_back(std::move(node_pair.second));
-        }
-    }
-
-    std::sort(new_graph.begin(), new_graph.end(), [](const node & a, const node & b) {
-        return a.index < b.index;
-    });
-
-    for (auto& n : new_graph) {
-        n.index = -1;
-    }
 
     std::swap(graph, new_graph);
 
