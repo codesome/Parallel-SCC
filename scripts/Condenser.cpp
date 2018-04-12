@@ -150,7 +150,7 @@ int main(int argc, char** argv) {
     for (auto i=0;i!=outlist.size();++i) {
         writer<<outlist[i].size()<<" ";
         for (auto j=0;j!=outlist[i].size();++j) {
-            writer<<outlist[i][j]+1<<" ";
+            writer<<outlist[i][j]<<" ";
         }
         writer<<"\n";
     }
