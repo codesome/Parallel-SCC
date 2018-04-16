@@ -1,17 +1,10 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
-#include <functional>
 #include <fstream>
 #include <iostream>
-#include <memory>
-#include <mutex>
-#include <queue>
-#include <unordered_set>
 #include <thread>
 #include <stack>
-#include <tuple>
 #include <vector>
 #include <map>
 
@@ -65,7 +58,7 @@ int main(int argc, char const *argv[]) {
     std::vector<std::map<int, node>> new_graph_global(n_cuts);
 
     /*===============================PHASE 1===============================*/
-    std::function<void(int)> thread_task =
+    auto thread_task =
         [n, n_cuts, step, &graph, &scc_uf, &scc_ids, &new_graph_global]
     (int thread_id) {
         std::map<int, node> &local_nodes = new_graph_global[thread_id];
@@ -81,9 +74,9 @@ int main(int argc, char const *argv[]) {
         // Tarjan
         {
             int index = 0;
-            std::stack<int> S;
+            std::stack<int,std::vector<int>> S;
             std::vector<std::vector<int>> retval;
-            std::stack<tuple_iii> callstack;
+            std::stack<tuple_iii,std::vector<tuple_iii>> callstack;
             int v;
             unsigned widx;
             int w;
@@ -142,7 +135,7 @@ endlabel:
     std::vector<std::thread> workers;
 
     for (int i = 0; i < n_cuts; ++i) {
-        workers.emplace_back([](std::function<void(int)> task, int thread_id) {
+        workers.emplace_back([](auto task, int thread_id) {
             task(thread_id);
         }, thread_task, i);
     }
@@ -171,7 +164,7 @@ endlabel:
     // printf("Before %d\n", scc_ids.load() );
     // TODO: keep phase 1 and 2 in single thread and use barriers
     /*===============================PHASE 2===============================*/
-    std::function<void(int)> thread_task2 =
+    auto thread_task2 =
         [&graph, n, n_cuts, step, &scc_uf, &new_graph]
     (int thread_id) {
 
@@ -211,7 +204,7 @@ endlabel:
     workers.clear();
 
     for (int i = 0; i < n_cuts; ++i) {
-        workers.emplace_back([](std::function<void(int)> task, int thread_id) {
+        workers.emplace_back([](auto task, int thread_id) {
             task(thread_id);
         }, thread_task2, i);
     }
@@ -229,8 +222,8 @@ endlabel:
     std::vector<std::vector<int>> retval;
     {
         int index = 0;
-        std::stack<int> S;
-        std::stack<std::tuple<int, int, int>> callstack;
+        std::stack<int,std::vector<int>> S;
+        std::stack<tuple_iii,std::vector<tuple_iii>> callstack;
         int v;
         unsigned widx;
         int w;
@@ -245,15 +238,15 @@ startlabel_last:
             for (widx = 0u; widx != graph[v].succs.size(); ++widx) {
                 w = graph[v].succs[widx];
                 if (graph[w].index == -1) {
-                    callstack.push(std::make_tuple(v, widx, w));
+                    callstack.push(tuple_iii(v, widx, w));
                     v = w;
                     goto startlabel_last;
 endlabel_last:
                     auto temp = callstack.top();
                     callstack.pop();
-                    v = std::get<0>(temp);
-                    widx = std::get<1>(temp);
-                    w = std::get<2>(temp);
+                    v = temp.get0;
+                    widx = temp.get1;
+                    w = temp.get2;
                     graph[v].lowlink = std::min(graph[v].lowlink, graph[w].lowlink);
                 }
                 else if (graph[w].onStack) {
