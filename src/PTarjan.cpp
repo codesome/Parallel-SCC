@@ -75,13 +75,12 @@ int main(int argc, char const *argv[]) {
         {
             int index = 0;
             std::stack<int,std::vector<int>> S;
-            std::vector<std::vector<int>> retval;
             std::stack<tuple_iii,std::vector<tuple_iii>> callstack;
             int v;
             unsigned widx;
             int w;
             auto strongconnect =
-            [&index, &graph, &S, &retval, &v, &widx, &w, &callstack, &scc_uf, start_index, end_index, &scc_ids, &local_nodes]() -> void {
+            [&index, &graph, &S, &v, &widx, &w, &callstack, &scc_uf, start_index, end_index, &scc_ids, &local_nodes]() -> void {
 startlabel:
                 graph[v].index = index;
                 graph[v].lowlink = index;
@@ -164,9 +163,20 @@ endlabel:
     // printf("Before %d\n", scc_ids.load() );
     // TODO: keep phase 1 and 2 in single thread and use barriers
     /*===============================PHASE 2===============================*/
+    std::vector<std::vector<bool>> edge_does_not_exist_to;
+    if(new_n <= 1000) {
+        for(int i=0; i<new_n; i++) {
+            std::vector<bool> temp(new_n);
+            for(int j=0; j<new_n; j++) {
+                temp[j] = true;
+            }
+            edge_does_not_exist_to.emplace_back(std::move(temp));
+        }
+    }
     auto thread_task2 =
-        [&graph, n, n_cuts, step, &scc_uf, &new_graph]
+        [&graph, n, n_cuts, step, &scc_uf, &new_graph, new_n, &edge_does_not_exist_to]
     (int thread_id) {
+
 
         {
             int step = new_graph.size()/n_cuts;
@@ -189,12 +199,26 @@ endlabel:
             end_index = (thread_id + 1) * step;
         }
 
-        for(int i=start_index; i!=end_index; i++) {
-            int scc_id = scc_uf[i];
-            for(auto v: graph[i].succs) {
-                int succ_scc_id = scc_uf[v];
-                if(scc_id != succ_scc_id) {
-                    new_graph[scc_id].succs.push_back(succ_scc_id);
+        if(new_n <= 1000) {
+            for(int i=start_index; i!=end_index; i++) {
+                int scc_id = scc_uf[i];
+                std::vector<bool> &ednet = edge_does_not_exist_to[scc_id];
+                for(auto v: graph[i].succs) {
+                    int succ_scc_id = scc_uf[v];
+                    if(ednet[succ_scc_id] && scc_id != succ_scc_id) {
+                        new_graph[scc_id].succs.push_back(succ_scc_id);
+                        ednet[succ_scc_id] = false;
+                    }
+                }
+            }
+        } else {
+            for(int i=start_index; i!=end_index; i++) {
+                int scc_id = scc_uf[i];
+                for(auto v: graph[i].succs) {
+                    int succ_scc_id = scc_uf[v];
+                    if(scc_id != succ_scc_id) {
+                        new_graph[scc_id].succs.push_back(succ_scc_id);
+                    }
                 }
             }
         }
