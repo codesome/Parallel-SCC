@@ -6,7 +6,8 @@
 #include <thread>
 #include <stack>
 #include <vector>
-#include <map>
+
+constexpr const int OPT_LIMIT=15000;
 
 struct node { //used for each node of the graph
     int index;
@@ -55,13 +56,13 @@ int main(int argc, char const *argv[]) {
 
     std::atomic_int scc_ids(0);
     // std::vector<std::vector<std::pair<int, int>>> cross_edges_global(n_cuts);
-    std::vector<std::map<int, node>> new_graph_global(n_cuts);
+    std::vector<std::vector<node>> new_graph_global(n_cuts);
 
     /*===============================PHASE 1===============================*/
     auto thread_task =
         [n, n_cuts, step, &graph, &scc_uf, &scc_ids, &new_graph_global]
     (int thread_id) {
-        std::map<int, node> &local_nodes = new_graph_global[thread_id];
+        std::vector<node> &local_nodes = new_graph_global[thread_id];
 
         int start_index = thread_id * step;
         int end_index;
@@ -115,7 +116,7 @@ endlabel:
                         graph[w].onStack = false;
                         scc_uf[w] = my_scc_id;
                     } while (w != v);
-                    local_nodes.emplace(std::make_pair(my_scc_id, node(my_scc_id)));
+                    local_nodes.emplace_back(node(my_scc_id));
                 }
                 if (!callstack.empty()) {
                     goto endlabel;
@@ -147,8 +148,8 @@ endlabel:
     std::vector<node> new_graph;
     new_graph.reserve(new_n);
     for (auto& thread_nodes : new_graph_global) {
-        for (auto& node_pair : thread_nodes) {
-            new_graph.emplace_back(std::move(node_pair.second));
+        for (auto& nodev : thread_nodes) {
+            new_graph.emplace_back(std::move(nodev));
         }
     }
 
@@ -160,17 +161,15 @@ endlabel:
     //     n.index = -1;
     // }
 
-    // printf("Before %d\n", scc_ids.load() );
+    printf("Before %d\n", scc_ids.load() );
     // TODO: keep phase 1 and 2 in single thread and use barriers
     /*===============================PHASE 2===============================*/
-    std::vector<std::vector<bool>> edge_does_not_exist_to;
-    if(new_n <= 1000) {
-        for(int i=0; i<new_n; i++) {
-            std::vector<bool> temp(new_n);
-            for(int j=0; j<new_n; j++) {
-                temp[j] = true;
-            }
-            edge_does_not_exist_to.emplace_back(std::move(temp));
+    std::vector<char> edge_does_not_exist_to;
+    if(new_n <= OPT_LIMIT) {
+        int sz = new_n*new_n;
+        edge_does_not_exist_to.reserve(new_n*new_n);
+        for(int i=0; i<sz; i++) {
+            edge_does_not_exist_to[i] = 1;
         }
     }
     auto thread_task2 =
@@ -199,15 +198,15 @@ endlabel:
             end_index = (thread_id + 1) * step;
         }
 
-        if(new_n <= 1000) {
+        if(new_n <= OPT_LIMIT) {
             for(int i=start_index; i!=end_index; i++) {
                 int scc_id = scc_uf[i];
-                std::vector<bool> &ednet = edge_does_not_exist_to[scc_id];
+                auto ednet = edge_does_not_exist_to.begin() + (scc_id*new_n);
                 for(auto v: graph[i].succs) {
                     int succ_scc_id = scc_uf[v];
-                    if(ednet[succ_scc_id] && scc_id != succ_scc_id) {
+                    if(*(ednet+succ_scc_id) && scc_id != succ_scc_id) {
                         new_graph[scc_id].succs.push_back(succ_scc_id);
-                        ednet[succ_scc_id] = false;
+                        *(ednet+succ_scc_id) = 0;
                     }
                 }
             }
@@ -314,7 +313,7 @@ endlabel_last:
     }
 
     idx = 0;
-    for (auto& scc_id : scc_uf) {
+    for (auto scc_id : scc_uf) {
         auto idx_of_scc = scc_index_map[scc_id];
         retval[idx_of_scc].push_back(idx);
         idx++;
